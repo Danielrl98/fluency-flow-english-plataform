@@ -1,0 +1,20 @@
+{
+  "name": "english-plataform",
+  "version": "1.0.0",
+  "description": "Plataforma de estudos diários de inglês com IA, leitura interativa e listening com ditado",
+  "main": "server/index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "node server/index.js",
+    "client": "cd client && npm run dev",
+    "build": "cd client && npm run build",
+    "start": "node server/index.js"
+  },
+  "dependencies": {
+    "@google/genai": "^2.27.0",
+    "concurrently": "^9.1.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  }
+}
