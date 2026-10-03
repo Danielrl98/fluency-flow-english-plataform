@@ -43,7 +43,8 @@ Mini plataforma web para estudantes de inglês praticarem diariamente leitura in
   - Botão central grande de Play / Replay.
   - Animação de ondas sonoras durante a reprodução.
   - Controle de velocidade (0.75x, 1.0x, 1.25x).
-  - Atalhos de teclado (`Alt + P` para ouvir, `Enter` para verificar).
+  - Botões de ação rápida no formulário: "Ouvir de Novo" e opção de "Pausar" áudio ativa durante a reprodução da frase.
+  - Atalhos de teclado (`Alt + P` ou `Ctrl + Espaço` para tocar / pausar, `Enter` para verificar).
 - **Campo de Digitação do Ditado:**
   - O estudante ouve a frase e digita em inglês o que escutou.
 - **Validação Inteligente & Flexível (Decisão do Usuário):**
@@ -114,6 +115,7 @@ Mini plataforma web para estudantes de inglês praticarem diariamente leitura in
 | **Qual o nível de rigor na validação do que você digita no listening?** | Validação flexível com dicas / Validação estrita     | **Validação flexível com dicas** (ignora maiúsculas e pontuações secundárias, destaca erros de grafia em amarelo e palavras faltantes em vermelho).               |
 | **Em qual formato salvar os arquivos na pasta concluidos/?**            | Markdown (.md) / Texto simples (.txt) / JSON (.json) | **Markdown (.md) organizado** (com título, nível, texto em inglês, resumo e vocabulário chave da lição).                                                          |
 | **Tela de login com credenciais no .env?**                              | Solicitação direta do usuário                        | Implementada tela de login simples validando `AUTH_EMAIL` e `AUTH_PASSWORD` do `.env`, protegendo todas as rotas com token Bearer e botão de logout no cabeçalho. |
+| **Pausar áudio no ListeningTab (linha 496)?**                           | Adicionar opção de pausar áudio                      | Adicionado botão "Pausar" visível durante a reprodução da frase ao lado de "Ouvir de Novo", além de suporte aos atalhos `Alt+P` e `Ctrl+Espaço` para alternar play/pause e limpeza de áudio na troca de sentenças. |
 
 ---
 

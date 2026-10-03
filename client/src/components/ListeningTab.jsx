@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Play,
+  Pause,
   RotateCcw,
   CheckCircle2,
   AlertCircle,
@@ -57,17 +58,27 @@ export default function ListeningTab({
       const timer = setTimeout(() => {
         handlePlayAudio();
       }, 350);
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        speechService.stop();
+      };
     }
+    return () => {
+      speechService.stop();
+    };
   }, [currentIndex, isCompleted]);
 
-  // Keyboard shortcuts (Space = Play audio, Enter = Validate)
+  // Keyboard shortcuts (Alt+P or Ctrl+Space = Play/Pause audio)
   useEffect(() => {
     const handleKeyDown = (e) => {
       // Don't intercept Space if typing in an input unless with modifier
-      if (e.key === ' ' && (e.ctrlKey || e.altKey)) {
+      if ((e.key === ' ' && (e.ctrlKey || e.altKey)) || (e.altKey && e.key.toLowerCase() === 'p')) {
         e.preventDefault();
-        handlePlayAudio();
+        if (isPlaying) {
+          handlePauseAudio();
+        } else {
+          handlePlayAudio();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -95,6 +106,12 @@ export default function ListeningTab({
     speechService.speak(currentSentence.text, () => {
       setIsPlaying(false);
     });
+  };
+
+  // Pause / stop audio playback
+  const handlePauseAudio = () => {
+    speechService.stop();
+    setIsPlaying(false);
   };
 
   const handleSpeedChange = (newSpeed) => {
@@ -487,14 +504,29 @@ export default function ListeningTab({
 
           {/* Form Actions */}
           <div className="flex items-center justify-between gap-3 pt-2">
-            <button
-              type="button"
-              onClick={handlePlayAudio}
-              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition flex items-center gap-1.5"
-            >
-              <RotateCcw className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Ouvir de Novo</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handlePlayAudio}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition flex items-center gap-1.5"
+                title="Ouvir de Novo"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Ouvir de Novo</span>
+              </button>
+
+              {isPlaying && (
+                <button
+                  type="button"
+                  onClick={handlePauseAudio}
+                  className="px-3.5 py-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-medium border border-amber-500/30 transition flex items-center gap-1.5 animate-in fade-in"
+                  title="Pausar áudio"
+                >
+                  <Pause className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                  <span>Pausar</span>
+                </button>
+              )}
+            </div>
 
             <div className="flex items-center gap-2">
               <button
