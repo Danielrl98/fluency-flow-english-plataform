@@ -34,6 +34,7 @@ export default function ListeningTab({
   const [isCompleted, setIsCompleted] = useState(false);
   const [savedFileInfo, setSavedFileInfo] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isValidationEnabled, setIsValidationEnabled] = useState(false);
 
   // Statistics for the session
   const [sessionAttempts, setSessionAttempts] = useState(0);
@@ -133,7 +134,10 @@ export default function ListeningTab({
         setPerfectSentencesCount(prev => prev + 1);
       }
 
+      setIsValidationEnabled(true);
+
       // Short delay then advance to next sentence or finish
+      // automatic mode
       setTimeout(() => {
         if (currentIndex + 1 < sentences.length) {
           setCurrentIndex(prev => prev + 1);
@@ -141,7 +145,17 @@ export default function ListeningTab({
           // Finished all sentences!
           handleFinishLesson();
         }
-      }, 1200);
+      }, 120000);
+    }
+  };
+
+  const nextSentence = () => {
+    if (currentIndex + 1 < sentences.length) {
+      setCurrentIndex(prev => prev + 1);
+      setIsValidationEnabled(false);
+    } else {
+      // Finished all sentences!
+      handleFinishLesson();
     }
   };
 
@@ -353,7 +367,7 @@ export default function ListeningTab({
         <div className="flex flex-wrap items-center justify-center gap-4 pt-3 border-t border-slate-800 text-xs text-slate-400">
           <div className="flex items-center gap-1.5">
             <span>Velocidade:</span>
-            {[0.75, 1.0, 1.25].map((s) => (
+            {[0.25,0.50, 0.75, 1.0, 1.25].map((s) => (
               <button
                 key={s}
                 onClick={() => handleSpeedChange(s)}
@@ -535,8 +549,12 @@ export default function ListeningTab({
                 className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 text-white text-sm font-semibold shadow-lg shadow-indigo-600/20 transition cursor-pointer disabled:cursor-not-allowed flex items-center gap-2"
               >
                 <span>Verificar</span>
-                <ChevronRight className="w-4 h-4" />
               </button>
+              {isValidationEnabled ? (
+                <button className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 text-white text-sm font-semibold shadow-lg shadow-indigo-600/20 transition cursor-pointer disabled:cursor-not-allowed flex items-center gap-2"onClick={nextSentence}>Avançar
+                <ChevronRight className="w-4 h-4" />
+                </button>
+              ) : ''}
             </div>
           </div>
         </form>
