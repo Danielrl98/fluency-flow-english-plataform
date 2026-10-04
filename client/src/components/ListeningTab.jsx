@@ -135,17 +135,6 @@ export default function ListeningTab({
       }
 
       setIsValidationEnabled(true);
-
-      // Short delay then advance to next sentence or finish
-      // automatic mode
-      setTimeout(() => {
-        if (currentIndex + 1 < sentences.length) {
-          setCurrentIndex(prev => prev + 1);
-        } else {
-          // Finished all sentences!
-          handleFinishLesson();
-        }
-      }, 120000);
     }
   };
 
