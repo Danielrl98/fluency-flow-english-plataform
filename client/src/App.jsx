@@ -8,7 +8,7 @@ import VocabularyModal from './components/VocabularyModal';
 import LoginScreen from './components/LoginScreen';
 import { speechService } from './utils/speech';
 
-// Starter lesson to provide immediate interactivity on first load
+// Starter lesson to provide immediate interactivity
 const STARTER_LESSON = {
   title: "Morning Coffee Routine",
   titlePt: "Rotina Matinal com Café",
@@ -118,7 +118,14 @@ const STARTER_LESSON = {
 export default function App() {
   // Auth state
   const [authToken, setAuthToken] = useState(() => localStorage.getItem('fluency_auth_token'));
-  const [userEmail, setUserEmail] = useState(() => localStorage.getItem('fluency_auth_email') || '');
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('fluency_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   const [isVerifyingAuth, setIsVerifyingAuth] = useState(true);
 
   // App state
@@ -129,6 +136,15 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [accent, setAccent] = useState('US');
 
+  // Active lesson in-progress state (persisted in SQLite)
+  const [activeProgress, setActiveProgress] = useState({
+    currentIndex: 0,
+    completedSentences: [],
+    audioPlaysCount: 0,
+    sessionAttempts: 0,
+    perfectSentencesCount: 0
+  });
+
   // Modals
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isVocabOpen, setIsVocabOpen] = useState(false);
@@ -137,7 +153,9 @@ export default function App() {
   // Stats and vocabulary
   const [stats, setStats] = useState({
     completedLessons: 0,
+    totalAudioPlays: 0,
     streakDays: 1,
+    xpPoints: 0,
     totalWordsSaved: 0
   });
   const [vocabulary, setVocabulary] = useState([]);
@@ -158,7 +176,10 @@ export default function App() {
         if (res.ok) {
           const data = await res.json();
           setAuthToken(token);
-          if (data.email) setUserEmail(data.email);
+          if (data.user) {
+            setCurrentUser(data.user);
+            localStorage.setItem('fluency_user', JSON.stringify(data.user));
+          }
         } else {
           handleLogout();
         }
@@ -172,11 +193,12 @@ export default function App() {
     verifyToken();
   }, []);
 
-  // On auth: load stats and vocabulary
+  // On auth: load stats, vocabulary, and active lesson progress from SQLite
   useEffect(() => {
     if (authToken) {
       fetchStats();
       fetchVocabulary();
+      fetchActiveLessonProgress();
     }
   }, [authToken]);
 
@@ -200,16 +222,16 @@ export default function App() {
     return res;
   };
 
-  const handleLoginSuccess = (token, email) => {
+  const handleLoginSuccess = (token, user) => {
     setAuthToken(token);
-    setUserEmail(email);
+    setCurrentUser(user);
   };
 
   const handleLogout = () => {
     localStorage.removeItem('fluency_auth_token');
-    localStorage.removeItem('fluency_auth_email');
+    localStorage.removeItem('fluency_user');
     setAuthToken(null);
-    setUserEmail('');
+    setCurrentUser(null);
   };
 
   const fetchStats = async () => {
@@ -236,6 +258,93 @@ export default function App() {
     }
   };
 
+  // Fetch active lesson progress from SQLite (restores state on page refresh!)
+  const fetchActiveLessonProgress = async () => {
+    try {
+      const res = await authFetch('/api/progress');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.hasProgress && data.progress && data.progress.lesson) {
+          const p = data.progress;
+          setLesson(p.lesson);
+          if (p.topic) setTopic(p.topic);
+          if (p.level) setLevel(p.level);
+          if (p.activeTab) setActiveTab(p.activeTab);
+
+          setActiveProgress({
+            currentIndex: p.currentIndex || 0,
+            completedSentences: p.completedSentences || [],
+            audioPlaysCount: p.audioPlaysCount || 0,
+            sessionAttempts: p.sessionAttempts || 0,
+            perfectSentencesCount: p.perfectSentencesCount || 0
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('Could not fetch active lesson progress:', err);
+    }
+  };
+
+  // Sync active lesson progress to SQLite
+  const saveProgressToDb = async (updatedFields = {}) => {
+    try {
+      const payload = {
+        topic: lesson?.topic || topic,
+        level: lesson?.level || level,
+        activeTab,
+        lesson,
+        ...activeProgress,
+        ...updatedFields
+      };
+
+      await authFetch('/api/progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    } catch (err) {
+      console.warn('Could not sync progress to SQLite:', err);
+    }
+  };
+
+  // Switch tab and persist tab choice in SQLite
+  const handleTabChange = (newTab) => {
+    setActiveTab(newTab);
+    saveProgressToDb({ activeTab: newTab });
+  };
+
+  // Record audio play event in SQLite and update real-time counters
+  const handleAudioPlay = async (type = 'sentence_listening', context = '') => {
+    // Optimistic UI update
+    setStats(prev => ({
+      ...prev,
+      totalAudioPlays: (prev?.totalAudioPlays || 0) + 1,
+      xpPoints: (prev?.xpPoints || 0) + 5
+    }));
+    setActiveProgress(prev => ({
+      ...prev,
+      audioPlaysCount: (prev?.audioPlaysCount || 0) + 1
+    }));
+
+    try {
+      const res = await authFetch('/api/progress/audio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, context })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setStats(prev => ({
+          ...prev,
+          totalAudioPlays: data.totalAudioPlays,
+          xpPoints: data.xpPoints
+        }));
+      }
+    } catch (err) {
+      console.warn('Failed to record audio play in SQLite:', err);
+    }
+  };
+
   // Generate lesson with AI
   const handleGenerate = async (customTopic = topic, customLevel = level) => {
     setIsLoading(true);
@@ -252,7 +361,14 @@ export default function App() {
 
       const data = await res.json();
       setLesson(data);
-      setActiveTab('reading'); // Start in reading tab
+      setActiveTab('reading');
+      setActiveProgress({
+        currentIndex: 0,
+        completedSentences: [],
+        audioPlaysCount: 0,
+        sessionAttempts: 0,
+        perfectSentencesCount: 0
+      });
     } catch (err) {
       console.error('Error generating lesson:', err);
       alert('Erro ao gerar aula com IA: ' + err.message);
@@ -261,7 +377,16 @@ export default function App() {
     }
   };
 
-  // Add / Toggle word in vocabulary
+  // Update listening progress (current index, completed sentences, attempts)
+  const handleUpdateListeningProgress = (progressUpdate) => {
+    setActiveProgress(prev => {
+      const merged = { ...prev, ...progressUpdate };
+      saveProgressToDb(merged);
+      return merged;
+    });
+  };
+
+  // Add / Toggle word in vocabulary (SQLite backed)
   const handleToggleVocab = async (wordData) => {
     const isSaved = vocabulary.some(
       w => (w.word || '').toLowerCase().trim() === (wordData.word || '').toLowerCase().trim()
@@ -269,7 +394,6 @@ export default function App() {
 
     try {
       if (isSaved) {
-        // Delete
         const res = await authFetch(`/api/vocabulary/${encodeURIComponent(wordData.word)}`, {
           method: 'DELETE'
         });
@@ -278,7 +402,6 @@ export default function App() {
           setVocabulary(updated);
         }
       } else {
-        // Add
         const res = await authFetch('/api/vocabulary', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -316,7 +439,7 @@ export default function App() {
     }
   };
 
-  // Save completed lesson to server /concluidos folder
+  // Save completed lesson to server SQLite & concluidos folder
   const handleCompleteLesson = async (completedLesson, sessionStats) => {
     try {
       const res = await authFetch('/api/complete', {
@@ -351,7 +474,7 @@ export default function App() {
     );
   }
 
-  // If not authenticated, render LoginScreen
+  // If not authenticated, render LoginScreen with SQLite Registration/Login
   if (!authToken) {
     return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
   }
@@ -362,7 +485,7 @@ export default function App() {
       <Header
         stats={stats}
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={handleTabChange}
         onOpenHistory={() => {
           setHistorySelectedFile(null);
           setIsHistoryOpen(true);
@@ -371,7 +494,7 @@ export default function App() {
         accent={accent}
         setAccent={setAccent}
         vocabCount={vocabulary.length}
-        userEmail={userEmail}
+        currentUser={currentUser}
         onLogout={handleLogout}
       />
 
@@ -393,14 +516,22 @@ export default function App() {
             lesson={lesson}
             savedWords={vocabulary}
             onToggleVocab={handleToggleVocab}
-            onGoToListening={() => setActiveTab('listening')}
+            onGoToListening={() => handleTabChange('listening')}
+            onAudioPlay={handleAudioPlay}
           />
         ) : (
           <ListeningTab
             lesson={lesson}
+            initialCurrentIndex={activeProgress.currentIndex}
+            initialCompletedSentences={activeProgress.completedSentences}
+            initialAudioPlaysCount={activeProgress.audioPlaysCount}
+            initialAttempts={activeProgress.sessionAttempts}
+            initialPerfectCount={activeProgress.perfectSentencesCount}
             onCompleteLesson={handleCompleteLesson}
-            onRestartLesson={() => setActiveTab('listening')}
+            onRestartLesson={() => handleTabChange('listening')}
             onViewCompletedFile={handleOpenCompletedFile}
+            onUpdateProgress={handleUpdateListeningProgress}
+            onAudioPlay={handleAudioPlay}
           />
         )}
       </main>

@@ -12,7 +12,9 @@ import {
   Volume2,
   Keyboard,
   Award,
-  ChevronRight
+  ChevronRight,
+  Database,
+  RefreshCw
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { speechService } from '../utils/speech';
@@ -20,40 +22,66 @@ import { validateDictation, getHint } from '../utils/diff';
 
 export default function ListeningTab({
   lesson,
+  initialCurrentIndex = 0,
+  initialCompletedSentences = [],
+  initialAudioPlaysCount = 0,
+  initialAttempts = 0,
+  initialPerfectCount = 0,
   onCompleteLesson,
   onRestartLesson,
-  onViewCompletedFile
+  onViewCompletedFile,
+  onUpdateProgress,
+  onAudioPlay
 }) {
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(initialCurrentIndex);
+  const [completedSentences, setCompletedSentences] = useState(initialCompletedSentences);
   const [userInput, setUserInput] = useState('');
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState(1.0);
   const [validationResult, setValidationResult] = useState(null);
   const [hintLevel, setHintLevel] = useState(0);
-  const [audioPlaysCount, setAudioPlaysCount] = useState(0);
+  const [audioPlaysCount, setAudioPlaysCount] = useState(initialAudioPlaysCount);
   const [isCompleted, setIsCompleted] = useState(false);
   const [savedFileInfo, setSavedFileInfo] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isValidationEnabled, setIsValidationEnabled] = useState(false);
 
   // Statistics for the session
-  const [sessionAttempts, setSessionAttempts] = useState(0);
-  const [perfectSentencesCount, setPerfectSentencesCount] = useState(0);
+  const [sessionAttempts, setSessionAttempts] = useState(initialAttempts);
+  const [perfectSentencesCount, setPerfectSentencesCount] = useState(initialPerfectCount);
 
   const inputRef = useRef(null);
 
   const sentences = lesson?.sentences || [];
   const currentSentence = sentences[currentIndex];
-  const progressPercent = sentences.length > 0 ? Math.round(((currentIndex) / sentences.length) * 100) : 0;
+  const progressPercent = sentences.length > 0
+    ? Math.round(((completedSentences.length) / sentences.length) * 100)
+    : 0;
+
+  // Sync state if initial props change (e.g. when loaded from SQLite)
+  useEffect(() => {
+    if (initialCurrentIndex !== undefined && initialCurrentIndex < sentences.length) {
+      setCurrentIndex(initialCurrentIndex);
+    }
+    if (initialCompletedSentences) {
+      setCompletedSentences(initialCompletedSentences);
+    }
+    if (initialAudioPlaysCount !== undefined) {
+      setAudioPlaysCount(initialAudioPlaysCount);
+    }
+  }, [lesson?.title, initialCurrentIndex]);
 
   // Auto-focus input and reset state when sentence changes
   useEffect(() => {
     setUserInput('');
     setValidationResult(null);
     setHintLevel(0);
+    setIsValidationEnabled(false);
+
     if (inputRef.current) {
       inputRef.current.focus();
     }
+
     // Auto-play the audio for the current sentence after a brief moment
     if (currentSentence && !isCompleted) {
       const timer = setTimeout(() => {
@@ -72,7 +100,6 @@ export default function ListeningTab({
   // Keyboard shortcuts (Alt+P or Ctrl+Space = Play/Pause audio)
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Don't intercept Space if typing in an input unless with modifier
       if ((e.key === ' ' && (e.ctrlKey || e.altKey)) || (e.altKey && e.key.toLowerCase() === 'p')) {
         e.preventDefault();
         if (isPlaying) {
@@ -103,6 +130,12 @@ export default function ListeningTab({
     if (!currentSentence) return;
     setIsPlaying(true);
     setAudioPlaysCount(prev => prev + 1);
+
+    // Record audio play in SQLite database!
+    if (onAudioPlay) {
+      onAudioPlay('sentence_listening', currentSentence.text);
+    }
+
     speechService.setRate(speed);
     speechService.speak(currentSentence.text, () => {
       setIsPlaying(false);
@@ -125,34 +158,84 @@ export default function ListeningTab({
     if (e) e.preventDefault();
     if (!userInput.trim() || !currentSentence) return;
 
-    setSessionAttempts(prev => prev + 1);
+    const newAttempts = sessionAttempts + 1;
+    setSessionAttempts(newAttempts);
+
     const result = validateDictation(userInput, currentSentence.text);
     setValidationResult(result);
 
     if (result.isMatch) {
+      let newPerfect = perfectSentencesCount;
       if (hintLevel === 0) {
-        setPerfectSentencesCount(prev => prev + 1);
+        newPerfect = perfectSentencesCount + 1;
+        setPerfectSentencesCount(newPerfect);
       }
 
       setIsValidationEnabled(true);
+
+      // Add to completed sentences list
+      const newCompleted = Array.from(new Set([...completedSentences, currentIndex]));
+      setCompletedSentences(newCompleted);
+
+      // Persist progress to SQLite!
+      if (onUpdateProgress) {
+        onUpdateProgress({
+          currentIndex,
+          completedSentences: newCompleted,
+          audioPlaysCount,
+          sessionAttempts: newAttempts,
+          perfectSentencesCount: newPerfect
+        });
+      }
     }
   };
 
   const nextSentence = () => {
+    const newCompleted = Array.from(new Set([...completedSentences, currentIndex]));
+    setCompletedSentences(newCompleted);
+
     if (currentIndex + 1 < sentences.length) {
-      setCurrentIndex(prev => prev + 1);
+      const nextIdx = currentIndex + 1;
+      setCurrentIndex(nextIdx);
       setIsValidationEnabled(false);
+
+      if (onUpdateProgress) {
+        onUpdateProgress({
+          currentIndex: nextIdx,
+          completedSentences: newCompleted,
+          audioPlaysCount,
+          sessionAttempts,
+          perfectSentencesCount
+        });
+      }
     } else {
       // Finished all sentences!
-      handleFinishLesson();
+      handleFinishLesson(newCompleted);
+    }
+  };
+
+  const handleSelectSentence = (idx) => {
+    if (idx >= 0 && idx < sentences.length) {
+      setCurrentIndex(idx);
+      setIsValidationEnabled(false);
+      setValidationResult(null);
+
+      if (onUpdateProgress) {
+        onUpdateProgress({
+          currentIndex: idx,
+          completedSentences,
+          audioPlaysCount,
+          sessionAttempts,
+          perfectSentencesCount
+        });
+      }
     }
   };
 
   // Handle lesson completion
-  const handleFinishLesson = async () => {
+  const handleFinishLesson = async (finalCompleted = completedSentences) => {
     setIsCompleted(true);
 
-    // Launch confetti!
     try {
       confetti({
         particleCount: 120,
@@ -163,7 +246,6 @@ export default function ListeningTab({
       // ignore
     }
 
-    // Save lesson to server /concluidos folder
     setIsSaving(true);
     const accuracy = Math.round(
       (perfectSentencesCount / Math.max(1, sentences.length)) * 100
@@ -191,8 +273,26 @@ export default function ListeningTab({
     const nextLevel = Math.min(3, hintLevel + 1);
     setHintLevel(nextLevel);
     if (nextLevel === 3) {
-      // Reveal sentence in input
       setUserInput(currentSentence.text);
+    }
+  };
+
+  // Reset lesson progress to sentence 1
+  const handleRestartFromBeginning = () => {
+    if (window.confirm('Deseja reiniciar o ditado desta lição desde a frase 1?')) {
+      setCurrentIndex(0);
+      setCompletedSentences([]);
+      setValidationResult(null);
+      setIsValidationEnabled(false);
+      if (onUpdateProgress) {
+        onUpdateProgress({
+          currentIndex: 0,
+          completedSentences: [],
+          audioPlaysCount,
+          sessionAttempts: 0,
+          perfectSentencesCount: 0
+        });
+      }
     }
   };
 
@@ -242,10 +342,10 @@ export default function ListeningTab({
           <FileCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
           <div className="flex-1">
             <h4 className="text-sm font-bold text-emerald-300">
-              Arquivo salvo na pasta concluidos/
+              Salvo no Banco SQLite e em Disco
             </h4>
             <p className="text-xs text-slate-400 mt-0.5">
-              O arquivo Markdown com o texto, tradução e vocabulário foi gravado em disco:
+              Seu histórico foi atualizado e o arquivo Markdown foi gravado:
             </p>
             <code className="text-xs font-mono text-emerald-300 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-500/20 block mt-1 break-all">
               {savedFileInfo?.filename || 'concluidos/aula-concluida.md'}
@@ -258,7 +358,7 @@ export default function ListeningTab({
           {savedFileInfo?.filename && (
             <button
               onClick={() => onViewCompletedFile(savedFileInfo.filename)}
-              className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold border border-slate-700 transition flex items-center gap-2"
+              className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold border border-slate-700 transition flex items-center gap-2 cursor-pointer"
             >
               <FileCheck className="w-4 h-4 text-emerald-400" />
               <span>Ver Arquivo Concluído</span>
@@ -266,8 +366,13 @@ export default function ListeningTab({
           )}
 
           <button
-            onClick={onRestartLesson}
-            className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold border border-slate-700 transition flex items-center gap-2"
+            onClick={() => {
+              setIsCompleted(false);
+              setCurrentIndex(0);
+              setCompletedSentences([]);
+              setValidationResult(null);
+            }}
+            className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold border border-slate-700 transition flex items-center gap-2 cursor-pointer"
           >
             <RotateCcw className="w-4 h-4 text-sky-400" />
             <span>Repetir Esta Aula</span>
@@ -281,7 +386,7 @@ export default function ListeningTab({
     <div className="space-y-6">
       {/* Progress & Header */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md">
-        <div className="flex items-center justify-between gap-4 mb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold uppercase px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
               Nível {lesson.level}
@@ -291,30 +396,77 @@ export default function ListeningTab({
             </span>
           </div>
 
-          <span className="text-xs font-mono font-bold text-indigo-400">
-            {progressPercent}% concluído
-          </span>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
+              <Database className="w-3.5 h-3.5" />
+              <span>Progresso salvo no banco</span>
+            </div>
+            <span className="text-xs font-mono font-bold text-indigo-400">
+              {progressPercent}% concluído
+            </span>
+          </div>
         </div>
 
         {/* Progress Bar */}
-        <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+        <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800 mb-4">
           <div
             className="h-full bg-gradient-to-r from-indigo-500 to-sky-400 transition-all duration-300 rounded-full"
             style={{ width: `${progressPercent}%` }}
           />
         </div>
+
+        {/* Sentence Stepper Pills */}
+        <div className="flex items-center justify-between pt-2 border-t border-slate-800/80">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[11px] text-slate-400 uppercase font-semibold mr-1">Frases:</span>
+            {sentences.map((_, idx) => {
+              const isDone = completedSentences.includes(idx);
+              const isCurrent = idx === currentIndex;
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleSelectSentence(idx)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
+                    isCurrent
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                      : isDone
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30'
+                      : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                  }`}
+                  title={`Ir para frase ${idx + 1}`}
+                >
+                  <span>{idx + 1}</span>
+                  {isDone && <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />}
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleRestartFromBeginning}
+            className="text-[11px] text-slate-500 hover:text-slate-300 transition flex items-center gap-1 cursor-pointer"
+            title="Recomeçar frases desta aula do início"
+          >
+            <RefreshCw className="w-3 h-3" />
+            <span className="hidden md:inline">Reiniciar frases</span>
+          </button>
+        </div>
       </div>
 
       {/* Audio Player Card for Current Segment */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-md text-center relative overflow-hidden">
-        {/* Glow effect when audio is playing */}
         {isPlaying && (
           <div className="absolute inset-0 bg-indigo-500/5 animate-pulse pointer-events-none" />
         )}
 
-        <div className="mb-4">
+        <div className="flex items-center justify-between mb-4">
           <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
             Áudio da Frase #{currentIndex + 1}
+          </span>
+          <span className="text-xs text-sky-400 font-mono">
+            {audioPlaysCount} {audioPlaysCount === 1 ? 'áudio tocado' : 'áudios tocados'}
           </span>
         </div>
 
@@ -356,11 +508,11 @@ export default function ListeningTab({
         <div className="flex flex-wrap items-center justify-center gap-4 pt-3 border-t border-slate-800 text-xs text-slate-400">
           <div className="flex items-center gap-1.5">
             <span>Velocidade:</span>
-            {[0.25,0.50, 0.75, 1.0, 1.25].map((s) => (
+            {[0.5, 0.75, 1.0, 1.25].map((s) => (
               <button
                 key={s}
                 onClick={() => handleSpeedChange(s)}
-                className={`px-2 py-0.5 rounded font-mono text-xs transition ${
+                className={`px-2 py-0.5 rounded font-mono text-xs transition cursor-pointer ${
                   speed === s
                     ? 'bg-indigo-600 text-white font-bold'
                     : 'bg-slate-800 text-slate-400 hover:text-white'
@@ -373,7 +525,7 @@ export default function ListeningTab({
 
           <div className="flex items-center gap-1 text-slate-500 text-[11px]">
             <Keyboard className="w-3.5 h-3.5" />
-            <span>Dica: Pressione <strong>Alt+P</strong> para ouvir</span>
+            <span>Atalho: <strong>Alt+P</strong> para tocar</span>
           </div>
         </div>
       </div>
@@ -390,7 +542,7 @@ export default function ListeningTab({
             <button
               type="button"
               onClick={handleRequestHint}
-              className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 font-medium transition"
+              className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 font-medium transition cursor-pointer"
             >
               <HelpCircle className="w-3.5 h-3.5" />
               <span>
@@ -418,7 +570,7 @@ export default function ListeningTab({
               value={userInput}
               onChange={(e) => {
                 setUserInput(e.target.value);
-                if (validationResult) setValidationResult(null); // clear validation on edit
+                if (validationResult) setValidationResult(null);
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
@@ -511,7 +663,7 @@ export default function ListeningTab({
               <button
                 type="button"
                 onClick={handlePlayAudio}
-                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition flex items-center gap-1.5"
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition flex items-center gap-1.5 cursor-pointer"
                 title="Ouvir de Novo"
               >
                 <RotateCcw className="w-3.5 h-3.5 text-indigo-400" />
@@ -522,7 +674,7 @@ export default function ListeningTab({
                 <button
                   type="button"
                   onClick={handlePauseAudio}
-                  className="px-3.5 py-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-medium border border-amber-500/30 transition flex items-center gap-1.5 animate-in fade-in"
+                  className="px-3.5 py-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-medium border border-amber-500/30 transition flex items-center gap-1.5 animate-in fade-in cursor-pointer"
                   title="Pausar áudio"
                 >
                   <Pause className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
@@ -539,11 +691,17 @@ export default function ListeningTab({
               >
                 <span>Verificar</span>
               </button>
-              {isValidationEnabled ? (
-                <button className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 text-white text-sm font-semibold shadow-lg shadow-indigo-600/20 transition cursor-pointer disabled:cursor-not-allowed flex items-center gap-2"onClick={nextSentence}>Avançar
-                <ChevronRight className="w-4 h-4" />
+
+              {isValidationEnabled && (
+                <button
+                  type="button"
+                  onClick={nextSentence}
+                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold shadow-lg shadow-emerald-600/20 transition cursor-pointer flex items-center gap-2 animate-in fade-in"
+                >
+                  <span>{currentIndex + 1 < sentences.length ? 'Avançar' : 'Concluir Aula'}</span>
+                  <ChevronRight className="w-4 h-4" />
                 </button>
-              ) : ''}
+              )}
             </div>
           </div>
         </form>

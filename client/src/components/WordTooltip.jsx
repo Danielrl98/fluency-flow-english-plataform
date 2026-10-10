@@ -7,12 +7,16 @@ export default function WordTooltip({
   position,
   onClose,
   onToggleVocab,
-  isSaved
+  isSaved,
+  onAudioPlay
 }) {
   if (!wordData) return null;
 
   const handleSpeak = (e) => {
     e.stopPropagation();
+    if (onAudioPlay) {
+      onAudioPlay('word_tooltip', wordData.word);
+    }
     speechService.speak(wordData.word);
   };
 
@@ -39,7 +43,7 @@ export default function WordTooltip({
             <span className="font-bold text-base text-white">{wordData.word}</span>
             <button
               onClick={handleSpeak}
-              className="p-1 rounded-md text-indigo-400 hover:text-indigo-200 hover:bg-indigo-500/20 transition"
+              className="p-1 rounded-md text-indigo-400 hover:text-indigo-200 hover:bg-indigo-500/20 transition cursor-pointer"
               title="Ouvir pronúncia"
             >
               <Volume2 className="w-3.5 h-3.5" />
@@ -55,7 +59,7 @@ export default function WordTooltip({
         <div className="flex items-center gap-1">
           <button
             onClick={handleSave}
-            className={`p-1.5 rounded-lg border transition ${
+            className={`p-1.5 rounded-lg border transition cursor-pointer ${
               isSaved
                 ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
                 : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white hover:border-slate-600'
@@ -66,7 +70,7 @@ export default function WordTooltip({
           </button>
           <button
             onClick={onClose}
-            className="p-1 rounded text-slate-500 hover:text-slate-300 transition"
+            className="p-1 rounded text-slate-500 hover:text-slate-300 transition cursor-pointer"
           >
             <X className="w-3.5 h-3.5" />
           </button>
