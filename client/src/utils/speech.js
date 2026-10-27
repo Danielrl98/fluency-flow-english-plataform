@@ -7,6 +7,7 @@ class SpeechService {
     this.preferredVoice = null;
     this.rate = 1.0;
     this.accent = 'US'; // 'US' or 'UK'
+    this.currentUtterance = null;
 
     if (this.synth) {
       this.loadVoices();
@@ -40,7 +41,6 @@ class SpeechService {
 
   updatePreferredVoice() {
     if (!this.voices || !this.voices.length) {
-      // Retry loading if voices weren't ready on initial sync constructor
       if (this.synth) {
         const raw = this.synth.getVoices() || [];
         this.voices = raw.filter(v => v.lang && v.lang.toLowerCase().startsWith('en'));
@@ -73,13 +73,9 @@ class SpeechService {
       return;
     }
 
-    try {
-      this.synth.cancel();
-    } catch {
-      // ignore
-    }
+    // Stop any playing speech and mark previous utterance as canceled
+    this.stop();
 
-    // Lazy load preferred voice if null
     if (!this.preferredVoice && this.voices.length === 0) {
       this.loadVoices();
     }
@@ -91,11 +87,20 @@ class SpeechService {
     utterance.rate = this.rate;
     utterance.pitch = 1.0;
 
+    utterance._isCanceled = false;
+    this.currentUtterance = utterance;
+
     let ended = false;
     const safeEnd = () => {
       if (!ended) {
         ended = true;
-        if (onEnd) onEnd();
+        const isCanceled = utterance._isCanceled;
+        if (this.currentUtterance === utterance) {
+          this.currentUtterance = null;
+        }
+        if (!isCanceled && onEnd) {
+          onEnd();
+        }
       }
     };
 
@@ -120,6 +125,10 @@ class SpeechService {
   }
 
   stop() {
+    if (this.currentUtterance) {
+      this.currentUtterance._isCanceled = true;
+      this.currentUtterance = null;
+    }
     if (this.synth) {
       try {
         this.synth.cancel();

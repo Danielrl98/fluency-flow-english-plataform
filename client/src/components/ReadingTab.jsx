@@ -17,9 +17,11 @@ export default function ReadingTab({
   const [readingSentenceIndex, setReadingSentenceIndex] = useState(null);
 
   const containerRef = useRef(null);
+  const isPlayingFullRef = useRef(false);
 
   useEffect(() => {
     // Reset reading state on lesson change
+    isPlayingFullRef.current = false;
     setIsPlayingFull(false);
     setReadingSentenceIndex(null);
     speechService.stop();
@@ -47,17 +49,20 @@ export default function ReadingTab({
   // Play full text continuously sentence by sentence
   const handleTogglePlayFull = () => {
     if (isPlayingFull) {
+      isPlayingFullRef.current = false;
       speechService.stop();
       setIsPlayingFull(false);
       setReadingSentenceIndex(null);
       return;
     }
 
+    isPlayingFullRef.current = true;
     setIsPlayingFull(true);
     let currentIdx = 0;
 
     const playNext = () => {
-      if (currentIdx >= (lesson.sentences || []).length) {
+      if (!isPlayingFullRef.current || currentIdx >= (lesson.sentences || []).length) {
+        isPlayingFullRef.current = false;
         setIsPlayingFull(false);
         setReadingSentenceIndex(null);
         return;
@@ -69,9 +74,14 @@ export default function ReadingTab({
         onAudioPlay('full_text', sentence.text);
       }
       speechService.speak(sentence.text, () => {
+        if (!isPlayingFullRef.current) return;
         currentIdx++;
         // short delay between sentences
-        setTimeout(playNext, 400);
+        setTimeout(() => {
+          if (isPlayingFullRef.current) {
+            playNext();
+          }
+        }, 400);
       });
     };
 

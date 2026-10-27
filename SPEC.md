@@ -367,3 +367,37 @@ A geração de lições via `gemini-3.8-flash` tendia a demorar mais do que o de
 ### 9.3. Validação
 - **Qualidade de Código (`oxlint`):** Executado `cd client && npx oxlint src` com 0 erros.
 - **Compilação de Produção (`vite build`):** Executado `npm run build` com sucesso gerando assets otimizados.
+
+
+---
+
+## 10. Correção de Bug do Player de Áudio & Novas Opções de Controle (Outubro 2026)
+
+### 10.1. Problemas Identificados
+- **Loop Infinito / Repetição Indesejada:** Quando a reprodução do áudio era cancelada ou pausada pelo usuário, a API Web Speech disparava o evento `onend`/`onerror` de cancelamento. Isso fazia com que o callback `onEnd` executasse prematuramente, agendando a frase seguinte na leitura contínua ou re-disparando a reprodução no `ListeningTab.jsx`.
+- **Comportamento Inconveniente do Botão Principal:** O botão central de ícone, quando clicado durante a reprodução, reiniciava o áudio do início em vez de pausá-lo.
+
+### 10.2. Solução Implementada
+
+1. **Correção de Cancelamento sem Callback Falso ([`speech.js`](client/src/utils/speech.js)):**
+   - O `SpeechService` passou a controlar a referência do `currentUtterance` com uma flag interna `_isCanceled`.
+   - Ao invocar `stop()` ou iniciar uma nova fala, a locução anterior é marcada como cancelada e o callback `onEnd` é suprimido na finalização. Assim, o callback só roda no término natural da narração.
+
+2. **Novos Controles com 3 Opções Claras ([`ListeningTab.jsx`](client/src/components/ListeningTab.jsx)):**
+   - Adicionada barra com 3 botões explícitos:
+     1. **`▶ Reproduzir`**: Inicia ou retoma a locução da frase.
+     2. **`⏸ Pausar`**: Pausa/interrompe a locução imediatamente.
+     3. **`🔄 Voltar do Início`**: Reinicia o áudio da frase do segundo 0:00.
+
+3. **Inversão do Comportamento do Botão do Ícone:**
+   - O botão central alternável agora alterna estado:
+     - Se estiver **reproduzindo** (`isPlaying = true`): Exibe ícone de **Pausa** e clicar nele **PAUSA** a execução.
+     - Se estiver **pausado/parado** (`isPlaying = false`): Exibe ícone de **Play** e clicar nele **REPRODUZ** o áudio.
+
+4. **Controle de Auto-Play Inteligente:**
+   - Adicionada referência `lastAutoPlayedIndexRef` no `ListeningTab.jsx` para garantir que o áudio seja auto-executado apenas **uma única vez** por nova frase, evitando loops ao mudar velocidade ou estados secundários.
+   - Adicionada referência `isPlayingFullRef` no `ReadingTab.jsx` garantindo parada imediata da leitura sequencial de texto.
+
+### 10.3. Validação
+- **Qualidade de Código (`oxlint`):** Executado `cd client && npx oxlint src` com 0 erros.
+- **Compilação de Produção (`vite build`):** Testado e validado com sucesso.

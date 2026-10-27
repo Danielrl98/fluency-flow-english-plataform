@@ -48,6 +48,7 @@ export default function ListeningTab({
   const [perfectSentencesCount, setPerfectSentencesCount] = useState(initialPerfectCount);
 
   const inputRef = useRef(null);
+  const lastAutoPlayedIndexRef = useRef(-1);
 
   const sentences = lesson?.sentences || [];
   const currentSentence = sentences[currentIndex];
@@ -68,7 +69,7 @@ export default function ListeningTab({
     }
   }, [lesson?.title, initialCurrentIndex, initialCompletedSentences, initialAudioPlaysCount, lesson?.sentences]);
 
-  // Play audio for current sentence
+  // Play / Resume audio for current sentence
   const handlePlayAudio = () => {
     if (!currentSentence) return;
     setIsPlaying(true);
@@ -84,13 +85,39 @@ export default function ListeningTab({
     });
   };
 
-  // Pause / stop audio playback
+  // Pause audio playback
   const handlePauseAudio = () => {
     speechService.stop();
     setIsPlaying(false);
   };
 
-  // Auto-focus input and reset state when sentence changes
+  // Restart audio for current sentence from the beginning
+  const handleRestartAudio = () => {
+    if (!currentSentence) return;
+    speechService.stop();
+    setIsPlaying(true);
+    setAudioPlaysCount(prev => prev + 1);
+
+    if (onAudioPlay) {
+      onAudioPlay('sentence_listening', currentSentence.text);
+    }
+
+    speechService.setRate(speed);
+    speechService.speak(currentSentence.text, () => {
+      setIsPlaying(false);
+    });
+  };
+
+  // Toggle play/pause (used by central icon button & shortcut)
+  const handleTogglePlayPause = () => {
+    if (isPlaying) {
+      handlePauseAudio();
+    } else {
+      handlePlayAudio();
+    }
+  };
+
+  // Auto-focus input and auto-play audio ONCE per new sentence
   useEffect(() => {
     setUserInput('');
     setValidationResult(null);
@@ -101,7 +128,9 @@ export default function ListeningTab({
       inputRef.current.focus();
     }
 
-    if (currentSentence && !isCompleted) {
+    if (currentSentence && !isCompleted && lastAutoPlayedIndexRef.current !== currentIndex) {
+      lastAutoPlayedIndexRef.current = currentIndex;
+
       const timer = setTimeout(() => {
         if (!currentSentence) return;
         setIsPlaying(true);
@@ -114,31 +143,25 @@ export default function ListeningTab({
           setIsPlaying(false);
         });
       }, 350);
+
       return () => {
         clearTimeout(timer);
         speechService.stop();
       };
     }
-    return () => {
-      speechService.stop();
-    };
-  }, [currentIndex, isCompleted, currentSentence, speed, onAudioPlay]);
+  }, [currentIndex, isCompleted, currentSentence]);
 
   // Keyboard shortcuts (Alt+P or Ctrl+Space)
   useEffect(() => {
     const handleKeyDown = (e) => {
       if ((e.key === ' ' && (e.ctrlKey || e.altKey)) || (e.altKey && e.key.toLowerCase() === 'p')) {
         e.preventDefault();
-        if (isPlaying) {
-          handlePauseAudio();
-        } else {
-          handlePlayAudio();
-        }
+        handleTogglePlayPause();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentSentence, isPlaying, speed]);
+  }, [isPlaying, currentSentence, speed]);
 
   if (!lesson || sentences.length === 0) {
     return (
@@ -471,22 +494,64 @@ export default function ListeningTab({
           </span>
         </div>
 
-        {/* Central Play / Replay Button */}
+        {/* Central Play / Pause Button */}
         <div className="flex items-center justify-center gap-4 my-2">
           <button
-            onClick={handlePlayAudio}
+            type="button"
+            onClick={handleTogglePlayPause}
             className={`w-16 h-16 sm:w-18 sm:h-18 rounded-2xl flex items-center justify-center transition-all shadow-xl cursor-pointer ${
               isPlaying
-                ? 'bg-indigo-500 text-white shadow-indigo-500/50 scale-105 animate-pulse'
+                ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-600/40 scale-105'
                 : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30 active:scale-95 sm:hover:scale-105'
             }`}
-            title="Ouvir áudio da frase"
+            title={isPlaying ? 'Pausar áudio' : 'Reproduzir áudio'}
           >
             {isPlaying ? (
-              <RotateCcw className="w-7 h-7 sm:w-8 sm:h-8 animate-spin" />
+              <Pause className="w-7 h-7 sm:w-8 sm:h-8 fill-white" />
             ) : (
               <Play className="w-7 h-7 sm:w-8 sm:h-8 ml-1 fill-white" />
             )}
+          </button>
+        </div>
+
+        {/* 3 Opções de Controle de Áudio: Reproduzir, Pausar, Voltar do Início */}
+        <div className="flex flex-wrap items-center justify-center gap-2 my-3">
+          <button
+            type="button"
+            onClick={handlePlayAudio}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+              isPlaying
+                ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/30'
+                : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/20'
+            }`}
+            title="Reproduzir áudio da frase"
+          >
+            <Play className="w-3.5 h-3.5 fill-current" />
+            <span>Reproduzir</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handlePauseAudio}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+              !isPlaying
+                ? 'bg-slate-800 text-slate-500 border border-slate-700/50'
+                : 'bg-amber-600 hover:bg-amber-500 text-white shadow-md shadow-amber-600/20'
+            }`}
+            title="Pausar áudio"
+          >
+            <Pause className="w-3.5 h-3.5 fill-current" />
+            <span>Pausar</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleRestartAudio}
+            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 flex items-center gap-1.5 transition cursor-pointer"
+            title="Voltar o áudio desta frase do início"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-sky-400" />
+            <span>Voltar do Início</span>
           </button>
         </div>
 
