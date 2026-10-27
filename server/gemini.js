@@ -2,6 +2,7 @@ require('dotenv').config();
 const { GoogleGenAI } = require('@google/genai');
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
 
 async function generateLesson(topic, level = 'B') {
   const levelDescriptions = {
@@ -56,7 +57,7 @@ You MUST respond strictly with a valid JSON object (no markdown backticks, no co
 }`;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3.8-flash',
+    model: GEMINI_MODEL,
     contents: prompt,
     config: {
       responseMimeType: 'application/json',

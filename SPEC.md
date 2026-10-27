@@ -2,7 +2,7 @@
 
 ## 1. Visão Geral do Projeto
 
-Plataforma web interativa para estudantes de inglês praticarem leitura contextual, compreensão auditiva (_listening_), ampliação de vocabulário e ditado guiado (_dictation_). A plataforma gera lições personalizadas sob demanda usando a API Google Gemini (`gemini-3.8-flash`), adaptadas ao nível CEFR (A, B ou C), estruturada como aplicação SaaS com autenticação oficial multiusuário, banco de dados SQLite persistente, retenção de progresso em tempo real e telemetria de reprodução de áudios.
+Plataforma web interativa para estudantes de inglês praticarem leitura contextual, compreensão auditiva (_listening_), ampliação de vocabulário e ditado guiado (_dictation_). A plataforma gera lições personalizadas sob demanda usando a API Google Gemini (`gemini-3.5-flash-lite` por padrão, configurável via `GEMINI_MODEL`), adaptadas ao nível CEFR (A, B ou C), estruturada como aplicação SaaS com autenticação oficial multiusuário, banco de dados SQLite persistente, retenção de progresso em tempo real e telemetria de reprodução de áudios.
 
 ---
 
@@ -73,7 +73,7 @@ Plataforma web interativa para estudantes de inglês praticarem leitura contextu
   - **Nível A (Básico / A1-A2):** Frases curtas, tempos verbais simples, vocabulário cotidiano.
   - **Nível B (Intermediário / B1-B2):** Phrasal verbs, conectivos, expressões idiomáticas e estruturas compostas.
   - **Nível C (Avançado / C1-C2):** Linguagem sofisticada, nuances formais/coloquiais e construções complexas.
-- **Motor de IA:** Integração direta com Google Gemini utilizando o modelo oficial `gemini-3.8-flash` através do pacote `@google/genai`.
+- **Motor de IA:** Integração direta com Google Gemini utilizando `gemini-3.5-flash-lite` (override opcional com `GEMINI_MODEL`) através do pacote `@google/genai`.
 
 ---
 
@@ -234,7 +234,7 @@ erDiagram
 
 ```
 english-plataform/
-├── .env                       # GEMINI_API_KEY, AUTH_EMAIL, AUTH_PASSWORD, JWT_SECRET, PORT
+├── .env                       # GEMINI_API_KEY, GEMINI_MODEL (opcional), AUTH_EMAIL, AUTH_PASSWORD, JWT_SECRET, PORT
 ├── package.json               # Dependências raiz (express, bcryptjs, @google/genai, cors, etc.)
 ├── SPEC.md                    # Esta especificação técnica completa
 ├── concluidos/                # Arquivos .md das aulas finalizadas
@@ -245,7 +245,7 @@ english-plataform/
 ├── server/
 │   ├── index.js               # Servidor Express, rotas protegidas e fallback estático
 │   ├── db.js                  # Camada de dados SQLite (CRUD de usuários, progresso, stats, vocabulário)
-│   ├── gemini.js              # Serviço de geração via Google Gemini 3.8 Flash
+│   ├── gemini.js              # Serviço de geração via Google Gemini (Flash-Lite padrão)
 │   └── storage.js             # Gestão de arquivos físicos em concluidos/
 └── client/
     ├── index.html             # HTML raiz com Google Fonts (Inter)
@@ -302,6 +302,7 @@ english-plataform/
 ```env
 PORT=8072
 GEMINI_API_KEY=sua_chave_gemini_aqui
+# GEMINI_MODEL=gemini-3.8-flash
 AUTH_EMAIL=admin@fluencyflow.com
 AUTH_PASSWORD=senha_inicial_admin
 JWT_SECRET=fluency_super_secret_jwt_token_key_saas_2026
@@ -321,3 +322,18 @@ npm run build
 npm start
 ```
 Compila o cliente React para `client/dist` e serve tudo diretamente pelo Express em `http://localhost:8072`.
+
+---
+
+## 8. Modelo Gemini: latência na geração de lições
+
+### Problema
+
+A geração de lições via `gemini-3.8-flash` tendia a demorar mais do que o desejado na experiência do estudante, especialmente porque o prompt exige JSON extenso (texto completo, tradução, palavra a palavra com IPA e expressões-chave).
+
+### Solução
+
+- Padrão alterado para **`gemini-3.5-flash-lite`** em [`server/gemini.js`](server/gemini.js), linha de modelo lida de `process.env.GEMINI_MODEL` com fallback para esse ID.
+- **Rollback sem alterar código:** definir `GEMINI_MODEL=gemini-3.8-flash` no `.env`.
+- **Riscos:** modelos Lite podem falhar ocasionalmente em JSON estruturado ou reduzir qualidade de IPA/traduções no nível C; monitorar erros de parse e qualidade pedagógica.
+- **Próximo passo se ainda estiver lento:** reduzir volume de saída no prompt (ex.: IPA só em palavras difíceis), independentemente do modelo.

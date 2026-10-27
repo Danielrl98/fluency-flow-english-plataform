@@ -2,7 +2,7 @@
 
 ## 1. Visão Geral do Projeto
 
-Mini plataforma web para estudantes de inglês praticarem diariamente leitura interativa, compreensão auditiva (_listening_) e escrita guiada (_dictation/ditado_). A plataforma gera lições personalizadas sob demanda usando a API Google Gemini (`gemini-3.8-flash`), adaptadas ao nível de proficiência do estudante (CEFR A, B ou C), com controle de acesso simples baseado em credenciais configuradas em arquivo `.env`.
+Mini plataforma web para estudantes de inglês praticarem diariamente leitura interativa, compreensão auditiva (_listening_) e escrita guiada (_dictation/ditado_). A plataforma gera lições personalizadas sob demanda usando a API Google Gemini (`gemini-3.5-flash-lite` por padrão, configurável via `GEMINI_MODEL`), adaptadas ao nível de proficiência do estudante (CEFR A, B ou C), com controle de acesso simples baseado em credenciais configuradas em arquivo `.env`.
 
 ---
 
@@ -16,7 +16,7 @@ Mini plataforma web para estudantes de inglês praticarem diariamente leitura in
   - **Nível A (Básico / A1-A2):** Frases curtas, tempos verbais simples, vocabulário cotidiano.
   - **Nível B (Intermediário / B1-B2):** Phrasal verbs, conectivos, expressões idiomáticas e estruturas compostas.
   - **Nível C (Avançado / C1-C2):** Linguagem sofisticada, nuances formais/coloquiais e construções complexas.
-- **Motor de IA:** Integração direta com Google Gemini utilizando o modelo oficial `gemini-3.8-flash` através do pacote `@google/genai`.
+- **Motor de IA:** Integração direta com Google Gemini utilizando `gemini-3.5-flash-lite` (override opcional com `GEMINI_MODEL`, ex.: `gemini-3.8-flash`) através do pacote `@google/genai`.
 
 ---
 
@@ -121,7 +121,7 @@ Mini plataforma web para estudantes de inglês praticarem diariamente leitura in
 
 ```
 english-plataform/
-├── .env                       # GEMINI_API_KEY, AUTH_EMAIL, AUTH_PASSWORD
+├── .env                       # GEMINI_API_KEY, GEMINI_MODEL (opcional), AUTH_EMAIL, AUTH_PASSWORD
 ├── package.json               # Scripts e dependências raiz (express, @google/genai, cors, etc.)
 ├── SPEC.md                    # Especificação técnica completa do projeto
 ├── concluidos/                # Pasta onde os arquivos .md das aulas finalizadas são gravados
@@ -131,7 +131,7 @@ english-plataform/
 │   └── stats.json             # Estatísticas de streak e aulas concluídas
 ├── server/
 │   ├── index.js               # Servidor Express (Rotas de Auth, API e fallback estático do client)
-│   ├── gemini.js              # Serviço de integração com Google Gemini 3.8 Flash
+│   ├── gemini.js              # Serviço de integração com Google Gemini (Flash-Lite padrão)
 │   └── storage.js             # Gerenciamento de arquivos em concluidos/ e data/
 └── client/
     ├── index.html             # Ponto de entrada com fontes e título
@@ -179,6 +179,7 @@ Exemplo das variáveis configuradas no arquivo `.env`:
 
 ```env
 GEMINI_API_KEY=
+# GEMINI_MODEL=gemini-3.8-flash
 AUTH_EMAIL=
 AUTH_PASSWORD=
 ```
