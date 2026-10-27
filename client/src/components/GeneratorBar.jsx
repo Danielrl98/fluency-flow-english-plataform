@@ -41,7 +41,7 @@ export default function GeneratorBar({
   };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl relative overflow-hidden">
+    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl relative overflow-hidden">
       {/* Decorative gradient glow */}
       <div className="absolute -top-24 -right-24 w-60 h-60 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -59,14 +59,14 @@ export default function GeneratorBar({
                 key={lvl.id}
                 type="button"
                 onClick={() => setLevel(lvl.id)}
-                className={`p-3 rounded-xl border text-left transition-all relative ${
+                className={`p-2.5 sm:p-3 rounded-xl border text-left transition-all relative cursor-pointer ${
                   isSelected
                     ? 'border-indigo-500 bg-indigo-500/10 shadow-sm shadow-indigo-500/20'
                     : 'border-slate-800 bg-slate-950/40 hover:border-slate-700 hover:bg-slate-800/40'
                 }`}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className={`font-bold text-sm ${isSelected ? 'text-indigo-300' : 'text-slate-200'}`}>
+                  <span className={`font-bold text-xs sm:text-sm ${isSelected ? 'text-indigo-300' : 'text-slate-200'}`}>
                     {lvl.label}
                   </span>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
@@ -75,7 +75,7 @@ export default function GeneratorBar({
                     {lvl.tag}
                   </span>
                 </div>
-                <p className="text-xs text-slate-400 line-clamp-1">{lvl.desc}</p>
+                <p className="text-[11px] sm:text-xs text-slate-400 line-clamp-1">{lvl.desc}</p>
               </button>
             );
           })}
@@ -89,15 +89,15 @@ export default function GeneratorBar({
             type="text"
             value={customInput}
             onChange={(e) => setCustomInput(e.target.value)}
-            placeholder="Qual assunto você quer praticar hoje? (Ex: Entrevista de emprego, pedindo comida, etc.)"
-            className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-4 py-3.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none transition-all shadow-inner"
+            placeholder="Qual assunto você quer praticar hoje?"
+            className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-3.5 py-3 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none transition-all shadow-inner"
             disabled={isLoading}
           />
         </div>
         <button
           type="submit"
           disabled={isLoading || !customInput.trim()}
-          className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-medium px-6 py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-600/20 disabled:shadow-none cursor-pointer disabled:cursor-not-allowed whitespace-nowrap"
+          className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-semibold text-xs sm:text-sm px-5 py-3 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-600/20 disabled:shadow-none cursor-pointer disabled:cursor-not-allowed whitespace-nowrap shrink-0"
         >
           {isLoading ? (
             <>
@@ -119,14 +119,14 @@ export default function GeneratorBar({
           <Compass className="w-3.5 h-3.5 text-sky-400" />
           <span>Ou escolha um tema do cotidiano:</span>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5 sm:gap-2">
           {QUICK_TOPICS.map((qt, idx) => (
             <button
               key={idx}
               type="button"
               onClick={() => handleSelectQuick(qt.query)}
               disabled={isLoading}
-              className="text-xs px-3 py-1.5 rounded-lg bg-slate-950/70 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 hover:bg-slate-800 transition disabled:opacity-50"
+              className="text-xs px-2.5 py-1.5 rounded-lg bg-slate-950/70 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 hover:bg-slate-800 transition disabled:opacity-50 cursor-pointer"
             >
               {qt.label}
             </button>

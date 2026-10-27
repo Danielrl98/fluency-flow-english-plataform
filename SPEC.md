@@ -337,3 +337,33 @@ A geração de lições via `gemini-3.8-flash` tendia a demorar mais do que o de
 - **Rollback sem alterar código:** definir `GEMINI_MODEL=gemini-3.8-flash` no `.env`.
 - **Riscos:** modelos Lite podem falhar ocasionalmente em JSON estruturado ou reduzir qualidade de IPA/traduções no nível C; monitorar erros de parse e qualidade pedagógica.
 - **Próximo passo se ainda estiver lento:** reduzir volume de saída no prompt (ex.: IPA só em palavras difíceis), independentemente do modelo.
+
+
+---
+
+## 9. Adaptação Mobile & Otimização de Performance (Outubro 2026)
+
+### 9.1. Problema Identificado
+- **Overflow de Elementos:** Em telas de dispositivos móveis (320px – 480px), cabeçalhos, marcadores de sentenças no ditado, formulários de geração e modais ultrapassavam a largura do viewport, causando rolagem horizontal incômoda.
+- **Lentidão / Lag em Mobile:** A rolagem da aba de leitura no celular travava constantemente. O balão de tradução de palavras (_WordTooltip_) saía das margens da tela quando acionado em palavras próximas às bordas superior ou laterais.
+
+### 9.2. Solução Implementada
+
+1. **Layout Responsivo Mobile-First:**
+   - **`client/index.html`**: Configurada meta tag de viewport com `viewport-fit=cover`.
+   - **`client/src/index.css`**: Adicionada proteção global `overflow-x: hidden` no `html, body` e utilitário `.no-scrollbar`.
+   - **`Header.jsx`**: Reorganizado em estrutura adaptativa (Linha 1: Logo e Perfil do Usuário; Linha 2: Alternador de Abas de largura total; Linha 3: Barra com rolagem horizontal suave para estatísticas de `🎧 Áudios`, `🔥 Streak` e `⚡ XP`).
+   - **`ListeningTab.jsx`**: Stepper de sentenças convertido para contêiner de rolagem horizontal touch. Botões de ação adaptados para empilhamento vertical em mobile (`w-full sm:w-auto`). Dicas de teclado desktop ocultadas em telas menores.
+   - **`GeneratorBar.jsx` & Modais (`VocabularyModal`, `HistoryModal`)**: Cards de nível CEFR, inputs de IA e flashcards totalmente responsivos com suporte a alternância de coluna e botão de voltar em smartphones.
+
+2. **Prevenção de Estouro de Tela no Popover (`WordTooltip.jsx`):**
+   - Implementada trava dinâmica de limites (`clampedLeft` restrito entre `12px` e `window.innerWidth - 12px`).
+   - Adicionada detecção de proximidade do topo (`position.top < 140px`) com inversão automática da seta e posicionamento do balão abaixo da palavra quando necessário.
+
+3. **Otimizações de Performance Mobile:**
+   - **Remoção de `onMouseEnter` no `ReadingTab.jsx`:** O evento `onMouseEnter` em cada palavra individual causava múltiplos cálculos de `getBoundingClientRect()` e renderizações desnecessárias durante o gesto de scroll em telas sensíveis ao toque. A interação foi unificada exclusivamente para `onClick`/`onTouch`, eliminando o gargalo de rolagem.
+   - **Gestão Eficiente da Web Speech API (`speech.js`)**: Implementado armazenamento em cache da lista de vozes sintetizadas e cancelamento gracioso de execução para evitar travamentos da main thread no Safari iOS e Chrome Android.
+
+### 9.3. Validação
+- **Qualidade de Código (`oxlint`):** Executado `cd client && npx oxlint src` com 0 erros.
+- **Compilação de Produção (`vite build`):** Executado `npm run build` com sucesso gerando assets otimizados.
